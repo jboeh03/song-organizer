@@ -1,5 +1,3 @@
-# song_organizer_free_upload.py
-
 import streamlit as st
 from faster_whisper import WhisperModel
 import tempfile
@@ -7,74 +5,71 @@ from pydub import AudioSegment
 import zipfile
 from collections import Counter
 import re
+import os
 
-# -------------------------
+st.set_page_config(page_title="Song Organizer", layout="wide")
+
+st.title("🎵 Song Organizer")
+
+# -------------------------------
 # Load Whisper model (CPU-friendly)
-# -------------------------
+# -------------------------------
 @st.cache_resource
 def load_whisper_model():
-    return WhisperModel("base")  # tiny/base/small/medium/large
+    # Change to "tiny", "base", "small", "medium", "large" as needed
+    return WhisperModel("base")  
 
 model = load_whisper_model()
 
-# -------------------------
-# Convert any audio to WAV
-# -------------------------
+# -------------------------------
+# Convert audio to WAV
+# -------------------------------
 def convert_to_wav(input_file):
     tmp_wav = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
     audio = AudioSegment.from_file(input_file)
     audio.export(tmp_wav.name, format="wav")
     return tmp_wav.name
 
-# -------------------------
+# -------------------------------
 # Transcribe audio
-# -------------------------
+# -------------------------------
 def transcribe_audio(file_path):
     segments, info = model.transcribe(file_path)
-    transcription = " ".join([seg.text for seg in segments])
-    return transcription
+    full_text = " ".join([segment.text for segment in segments])
+    return full_text
 
-# -------------------------
-# Recommend title from chorus-like repetition
-# -------------------------
-def recommend_title(transcription, top_n=3):
-    # Split into lines or phrases
-    lines = re.split(r"[.\n]", transcription)
-    lines = [line.strip() for line in lines if line.strip()]
-    
-    # Count repeated lines
-    counter = Counter(lines)
-    most_common = counter.most_common(top_n)
-    
-    # Return the most repeated line as suggested title
-    if most_common:
-        return most_common[0][0]
-    return "Untitled"
+# -------------------------------
+# Extract common words (simple lyrics analysis)
+# -------------------------------
+def extract_common_words(text, top_n=10):
+    words = re.findall(r"\b\w+\b", text.lower())
+    counter = Counter(words)
+    return counter.most_common(top_n)
 
-# -------------------------
-# Streamlit UI
-# -------------------------
-st.title("🎵 Song Organizer")
+# -------------------------------
+# Streamlit File Uploader
+# -------------------------------
+uploaded_file = st.file_uploader("Upload an audio file", type=["mp3", "wav", "m4a", "ogg", "flac"])
 
-uploaded_files = st.file_uploader(
-    "Upload one or more audio files",
-    type=["mp3", "wav", "m4a", "flac"],
-    accept_multiple_files=True
-)
+if uploaded_file:
+    st.info("Converting audio...")
+    wav_file = convert_to_wav(uploaded_file)
 
-if uploaded_files:
-    st.info("Processing files... This may take a moment.")
-    
-    for uploaded_file in uploaded_files:
-        st.subheader(f"File: {uploaded_file.name}")
-        
-        # Convert to WAV
-        wav_path = convert_to_wav(uploaded_file)
-        
-        # Transcribe
-        transcription = transcribe_audio(wav_path)
-        st.text_area("Transcription", transcription, height=200)
-        
-        # Recommend title
-        suggested_title = recommend_title(transcription)
-        st.text_input("Suggested Title", value=suggested_title)
+    st.info("Transcribing audio (this may take a while)...")
+    transcription = transcribe_audio(wav_file)
+    st.success("Transcription completed!")
+
+    st.subheader("🎤 Transcription")
+    st.text_area("Lyrics / Text", transcription, height=300)
+
+    st.subheader("📊 Most Common Words")
+    common_words = extract_common_words(transcription)
+    st.table(common_words)
+
+    # Optional: allow download of transcription
+    st.download_button(
+        label="Download Transcription",
+        data=transcription,
+        file_name=os.path.splitext(uploaded_file.name)[0] + "_transcription.txt",
+        mime="text/plain"
+    )
