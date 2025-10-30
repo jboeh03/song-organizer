@@ -1,1 +1,4 @@
-streamlit\nwhisper\npydub\ntorch
+streamlit
+whisper
+pydub
+torch
